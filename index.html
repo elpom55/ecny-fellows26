@@ -467,15 +467,18 @@ let map, markers = [], fellows = [], mode = 'work';
 let geocodeCache = {};
 
 async function fetchFellows() {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=Sheet1`;
   const res = await fetch(url);
   const text = await res.text();
-  const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
-  const rows = json.table.rows;
+  const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*?)\);?\s*$/);
+  if (!match) throw new Error('Could not parse sheet response: ' + text.substring(0, 200));
+  const json = JSON.parse(match[1]);
+  if (!json.table) throw new Error('No table in response');
+  const rows = json.table.rows || [];
   const cols = json.table.cols.map(c => c.label);
   return rows.map(r => {
     const obj = {};
-    cols.forEach((c, i) => { obj[c] = r.c[i] ? r.c[i].v : ''; });
+    cols.forEach((c, i) => { obj[c] = r.c && r.c[i] && r.c[i].v != null ? r.c[i].v : ''; });
     return obj;
   }).filter(r => r['Name'] && r['Name'].toString().trim());
 }
@@ -662,8 +665,9 @@ async function init() {
   } catch(e) {
     document.getElementById('loading').style.display = 'none';
     const err = document.getElementById('error-msg');
-    err.textContent = 'Could not load fellows data. Make sure the Google Sheet is published to the web.';
+    err.textContent = 'Error: ' + e.message;
     err.style.display = 'block';
+    console.error('Load error:', e);
   }
 }
 </script>
