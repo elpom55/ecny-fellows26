@@ -573,7 +573,7 @@ async function renderMarkers() {
     markers.push(marker);
   }
 
-  clusterer = new MarkerClusterer({ map, markers, renderer: {
+  clusterer = new markerClusterer.MarkerClusterer({ map, markers, renderer: {
     render({ count, position }) {
       return new google.maps.Marker({
         position,
@@ -673,9 +673,9 @@ async function init() {
 </script>
 
 <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.umd.js"></script>
-<script async defer
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD1wA7lWm5rY3xDBFBji7UjYPRb67Er2Wo&callback=init">
-</script>
+<script
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD1wA7lWm5rY3xDBFBji7UjYPRb67Er2Wo&callback=init"
+  defer></script>
 
 </body>
 </html>
