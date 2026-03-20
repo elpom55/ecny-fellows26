@@ -145,11 +145,103 @@
     background: var(--white);
     border-radius: 16px;
     box-shadow: var(--shadow), 0 0 0 1px var(--border);
-    padding: 20px 24px;
-    width: 320px;
+    padding: 20px 20px 16px;
+    width: 360px;
     z-index: 5;
     display: none;
     animation: slideUp 0.2s ease;
+  }
+
+  .profile-list-scroll {
+    max-height: 340px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .person-card {
+    background: var(--cream);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+
+  .person-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .person-card .avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--navy);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Serif Display', serif;
+    font-size: 14px;
+    color: var(--gold);
+    flex-shrink: 0;
+  }
+
+  .person-card .profile-name {
+    font-family: 'DM Serif Display', serif;
+    font-size: 15px;
+    color: var(--navy);
+  }
+
+  .person-card-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .person-card .info-block {
+    background: var(--white);
+    border-radius: 6px;
+    padding: 7px 10px;
+  }
+
+  .person-card-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  .person-card-actions a {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: opacity 0.15s;
+  }
+
+  .person-card-actions .btn-linkedin {
+    background: #0a66c2;
+    color: white;
+  }
+
+  .person-card-actions .btn-linkedin:hover { background: #004182; }
+
+  .person-card-actions .btn-linkedin.disabled {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  .person-card-actions .btn-phone {
+    background: var(--white);
+    color: var(--navy);
+    border: 1px solid var(--border);
+    font-size: 12px;
   }
 
   @keyframes slideUp {
@@ -363,30 +455,8 @@
 
 <div class="profile-panel" id="profile-panel">
   <button class="close-profile" onclick="closeProfile()">✕</button>
-  <div class="profile-header">
-    <div class="avatar" id="profile-avatar"></div>
-    <div class="profile-name" id="profile-name"></div>
-  </div>
-  <div class="profile-info">
-    <div class="info-block">
-      <div class="info-label">Weekday Zip</div>
-      <div class="info-value" id="profile-work"></div>
-    </div>
-    <div class="info-block">
-      <div class="info-label">Weekend Zip</div>
-      <div class="info-value" id="profile-home"></div>
-    </div>
-  </div>
-  <div class="info-block" id="profile-phone-block" style="margin-bottom:10px; display:none;">
-    <div class="info-label">📱 Cell (impromptu coffee?)</div>
-    <div class="info-value" id="profile-phone"></div>
-  </div>
-  <a class="linkedin-btn" id="profile-linkedin" href="#" target="_blank" rel="noopener">
-    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-    </svg>
-    View LinkedIn Profile
-  </a>
+  <div id="profile-zip-header" style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:var(--gray); margin-bottom:12px;"></div>
+  <div id="profile-list"></div>
 </div>
 
 <script>
@@ -448,7 +518,10 @@ function initMap() {
   });
 }
 
+let clusterer = null;
+
 function clearMarkers() {
+  if (clusterer) { clusterer.clearMarkers(); clusterer = null; }
   markers.forEach(m => m.setMap(null));
   markers = [];
 }
@@ -460,61 +533,101 @@ function getInitials(name) {
 async function renderMarkers() {
   clearMarkers();
   const zipField = mode === 'work' ? 'Work Zip (use home zip if remote)' : 'Home Zip (enter even if same as work)';
-  
+  const color = mode === 'work' ? '#e8472a' : '#4a90d9';
+
+  // Group fellows by zip so we can handle multiple people at same location
+  const zipGroups = {};
   for (const fellow of fellows) {
     const zip = fellow[zipField];
     if (!zip) continue;
+    if (!zipGroups[zip]) zipGroups[zip] = [];
+    zipGroups[zip].push(fellow);
+  }
+
+  for (const [zip, group] of Object.entries(zipGroups)) {
     const loc = await geocodeZip(zip);
     if (!loc) continue;
 
     const marker = new google.maps.Marker({
       position: loc,
-      map,
-      title: fellow['Name'],
+      title: group.map(f => f['Name']).join(', '),
       icon: {
         path: google.maps.SymbolPath.CIRCLE,
         scale: 9,
-        fillColor: mode === 'work' ? '#e8472a' : '#4a90d9',
+        fillColor: color,
         fillOpacity: 1,
         strokeColor: '#ffffff',
         strokeWeight: 2,
       }
     });
 
-    marker.addListener('click', () => showProfile(fellow));
+    if (group.length === 1) {
+      marker.addListener('click', () => showProfile(group[0]));
+    } else {
+      marker.addListener('click', () => showGroupProfile(group));
+    }
+
     markers.push(marker);
   }
+
+  clusterer = new MarkerClusterer({ map, markers, renderer: {
+    render({ count, position }) {
+      return new google.maps.Marker({
+        position,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 18,
+          fillColor: color,
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 2,
+        },
+        label: { text: String(count), color: '#ffffff', fontSize: '12px', fontWeight: '600' },
+        zIndex: 1000,
+      });
+    }
+  }});
 }
 
-function showProfile(fellow) {
-  const name = fellow['Name'] || '';
-  const workZip = fellow['Work Zip (use home zip if remote)'] || '—';
-  const homeZip = fellow['Home Zip (enter even if same as work)'] || '—';
-  const linkedin = fellow['LinkedIn'] || '';
-  const phone = fellow['Cellphone (to reach out for impromptu coffee)'] || '';
+const linkedinSVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width:13px;height:13px;fill:white;flex-shrink:0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>`;
 
-  document.getElementById('profile-avatar').textContent = getInitials(name);
-  document.getElementById('profile-name').textContent = name;
-  document.getElementById('profile-work').textContent = workZip;
-  document.getElementById('profile-home').textContent = homeZip;
+function showProfile(fellow) { showGroupProfile([fellow]); }
 
-  const phoneBlock = document.getElementById('profile-phone-block');
-  document.getElementById('profile-phone').textContent = phone || 'Not provided';
-  phoneBlock.style.display = 'block';
+function showGroupProfile(group) {
+  const zip = group[0][mode === 'work' ? 'Work Zip (use home zip if remote)' : 'Home Zip (enter even if same as work)'] || '';
+  const count = group.length;
+  document.getElementById('profile-zip-header').textContent =
+    `${count} fellow${count > 1 ? 's' : ''} in zip ${zip}`;
 
-  const linkedinBtn = document.getElementById('profile-linkedin');
-  if (linkedin) {
-    linkedinBtn.href = linkedin.startsWith('http') ? linkedin : 'https://' + linkedin;
-    linkedinBtn.style.display = 'flex';
-    linkedinBtn.style.opacity = '1';
-    linkedinBtn.style.pointerEvents = 'auto';
-  } else {
-    linkedinBtn.href = '#';
-    linkedinBtn.style.display = 'flex';
-    linkedinBtn.style.opacity = '0.4';
-    linkedinBtn.style.pointerEvents = 'none';
-    linkedinBtn.innerHTML = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width:16px;height:16px;fill:white"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg> LinkedIn Not Provided`;
-  }
+  const list = document.getElementById('profile-list');
+  list.innerHTML = `<div class="profile-list-scroll">` +
+    group.map(fellow => {
+      const name = fellow['Name'] || '';
+      const workZip = fellow['Work Zip (use home zip if remote)'] || '—';
+      const homeZip = fellow['Home Zip (enter even if same as work)'] || '—';
+      const linkedin = fellow['LinkedIn'] || '';
+      const phone = fellow['Cellphone (to reach out for impromptu coffee)'] || '';
+      const linkedinHref = linkedin ? (linkedin.startsWith('http') ? linkedin : 'https://' + linkedin) : '#';
+      const linkedinClass = linkedin ? 'btn-linkedin' : 'btn-linkedin disabled';
+      const linkedinLabel = linkedin ? 'LinkedIn' : 'No LinkedIn';
+      const phoneLabel = phone || 'No cell';
+      return `
+        <div class="person-card">
+          <div class="person-card-header">
+            <div class="avatar">${getInitials(name)}</div>
+            <div class="profile-name">${name}</div>
+          </div>
+          <div class="person-card-fields">
+            <div class="info-block"><div class="info-label">Weekday Zip</div><div class="info-value">${workZip}</div></div>
+            <div class="info-block"><div class="info-label">Weekend Zip</div><div class="info-value">${homeZip}</div></div>
+          </div>
+          <div class="person-card-actions">
+            <a href="${linkedinHref}" target="_blank" rel="noopener" class="${linkedinClass}">${linkedinSVG} ${linkedinLabel}</a>
+            <div class="btn-phone">📱 ${phoneLabel}</div>
+          </div>
+        </div>`;
+    }).join('') +
+  `</div>`;
 
   document.getElementById('profile-panel').classList.add('visible');
 }
@@ -555,6 +668,7 @@ async function init() {
 }
 </script>
 
+<script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.umd.js"></script>
 <script async defer
   src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD1wA7lWm5rY3xDBFBji7UjYPRb67Er2Wo&callback=init">
 </script>
