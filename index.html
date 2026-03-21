@@ -146,6 +146,27 @@ function initMap() {
     ],
     mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
   });
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      const userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      map.setCenter(userLoc);
+      new google.maps.Marker({
+        position: userLoc,
+        map,
+        title: 'You are here',
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: '#c9a84c',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 3,
+        },
+        zIndex: 999,
+      });
+    }, () => {});
+  }
 }
 
 function clearMarkers() {
@@ -161,7 +182,6 @@ async function renderMarkers() {
   clearMarkers();
   const zipField = mode === 'work' ? WORK_FIELD : HOME_FIELD;
   const color = mode === 'work' ? '#e8472a' : '#4a90d9';
-
   const zipGroups = {};
   for (const fellow of fellows) {
     const zip = fellow[zipField];
@@ -174,7 +194,6 @@ async function renderMarkers() {
 
   for (const [zip, group] of Object.entries(zipGroups)) {
     const loc = await geocodeZip(zip);
-
     const marker = new google.maps.Marker({
       position: loc,
       map,
