@@ -106,7 +106,6 @@ async function fetchFellows() {
   if (!json.table) throw new Error('No table in response');
   const rows = json.table.rows || [];
   const cols = json.table.cols.map(c => c.label);
-  console.log('Columns found:', cols);
   return rows.map(r => {
     const obj = {};
     cols.forEach((c, i) => { obj[c] = r.c && r.c[i] && r.c[i].v != null ? r.c[i].v : ''; });
@@ -120,7 +119,6 @@ function geocodeZip(zip) {
   if (geocodeCache[key]) return Promise.resolve(geocodeCache[key]);
   return new Promise(resolve => {
     geocoder.geocode({ address: key + ', USA' }, (results, status) => {
-      console.log('Geocode', key, '->', status);
       if (status === 'OK' && results[0]) {
         const loc = results[0].geometry.location;
         geocodeCache[key] = loc;
@@ -173,11 +171,9 @@ async function renderMarkers() {
     zipGroups[key].push(fellow);
   }
 
-  console.log('Zip groups:', Object.keys(zipGroups));
 
   for (const [zip, group] of Object.entries(zipGroups)) {
     const loc = await geocodeZip(zip);
-    if (!loc) { console.warn('No location for zip:', zip); continue; }
 
     const marker = new google.maps.Marker({
       position: loc,
@@ -185,19 +181,25 @@ async function renderMarkers() {
       title: group.map(f => f['Name']).join(', '),
       icon: {
         path: google.maps.SymbolPath.CIRCLE,
-        scale: 10,
+        scale: group.length > 1 ? 14 : 10,
         fillColor: color,
         fillOpacity: 1,
         strokeColor: '#ffffff',
         strokeWeight: 2,
-      }
+      },
+      label: group.length > 1 ? {
+        text: String(group.length),
+        color: '#ffffff',
+        fontSize: '11px',
+        fontWeight: '600',
+        fontFamily: 'DM Sans, sans-serif'
+      } : null
     });
 
     marker.addListener('click', () => showGroupProfile(group, zip));
     markers.push(marker);
   }
 
-  console.log('Total markers placed:', markers.length);
 }
 
 const linkedinSVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width:13px;height:13px;fill:white;flex-shrink:0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>`;
@@ -257,7 +259,6 @@ async function switchMode(newMode) {
 async function init() {
   try {
     fellows = await fetchFellows();
-    console.log('Fellows loaded:', fellows.length);
     const workCount = fellows.filter(f => f[WORK_FIELD]).length;
     const homeCount = fellows.filter(f => f[HOME_FIELD]).length;
     document.getElementById('work-count').textContent = workCount || '';
@@ -270,7 +271,6 @@ async function init() {
     const err = document.getElementById('error-msg');
     err.textContent = 'Error: ' + e.message;
     err.style.display = 'block';
-    console.error('Init error:', e);
   }
 }
 </script>
